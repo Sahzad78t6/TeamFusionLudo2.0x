@@ -44,11 +44,79 @@ public class Inventory : MonoBehaviour
         instance = this;
         controller = GetComponent<PlayerController>();
         needs = GetComponent<PlayerNeeds>();
+        EnsureInventoryWindow();
+    }
+
+    public void EnsureInventoryWindow()
+    {
+        if (inventoryWindow != null) return;
+
+        var canvases = UnityEngine.Resources.FindObjectsOfTypeAll<Canvas>();
+        foreach (var c in canvases)
+        {
+            if (c != null && (c.gameObject.name == "Inventory Canvas" || c.gameObject.name.Contains("Inventory")))
+            {
+                inventoryWindow = c.gameObject;
+                break;
+            }
+        }
+        if (inventoryWindow == null)
+        {
+            GameObject invObj = GameObject.Find("Inventory Canvas") ?? GameObject.Find("InventoryWindow") ?? GameObject.Find("InventoryCard") ?? GameObject.Find("Inventory") ?? GameObject.Find("InventoryPanel");
+            if (invObj != null) inventoryWindow = invObj;
+        }
+
+        EnsureCloseButton();
+    }
+
+    private void EnsureCloseButton()
+    {
+        if (inventoryWindow == null) return;
+        Transform existing = inventoryWindow.transform.Find("CloseButton");
+        if (existing == null)
+        {
+            GameObject closeObj = new GameObject("CloseButton");
+            closeObj.transform.SetParent(inventoryWindow.transform, false);
+            RectTransform rt = closeObj.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(1f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = new Vector2(-40, -40);
+            rt.sizeDelta = new Vector2(64, 64);
+
+            Image img = closeObj.AddComponent<Image>();
+            img.color = new Color(0.85f, 0.2f, 0.2f, 0.9f);
+            img.raycastTarget = true;
+
+            Outline outline = closeObj.AddComponent<Outline>();
+            outline.effectColor = Color.white;
+
+            Button btn = closeObj.AddComponent<Button>();
+            btn.targetGraphic = img;
+            btn.onClick.AddListener(() => Toggle());
+
+            GameObject txtObj = new GameObject("Text");
+            txtObj.transform.SetParent(closeObj.transform, false);
+            TextMeshProUGUI txt = txtObj.AddComponent<TextMeshProUGUI>();
+            txt.text = "X";
+            txt.fontSize = 32;
+            txt.fontStyle = FontStyles.Bold;
+            txt.alignment = TextAlignmentOptions.Center;
+            txt.color = Color.white;
+            txt.raycastTarget = false;
+            RectTransform textRt = txtObj.GetComponent<RectTransform>();
+            textRt.anchorMin = Vector2.zero;
+            textRt.anchorMax = Vector2.one;
+            textRt.sizeDelta = Vector2.zero;
+
+            closeObj.transform.SetAsLastSibling();
+        }
     }
 
     private void Start()
     {
-        inventoryWindow.SetActive(false);
+        EnsureInventoryWindow();
+        if (inventoryWindow != null) inventoryWindow.SetActive(false);
         slots = new ItemSlot[uiSlots.Length];
         
         //initialize the slots
@@ -61,7 +129,80 @@ public class Inventory : MonoBehaviour
         }
         
         ClearSelectedItemWindow();
+    }
+
+    private void Update()
+    {
+        // PC keyboard Tab / I keys to toggle inventory
+        if (Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.I))
+        {
+            Toggle();
+        }
+
+        for (int i = 0; i < 8; i++)
+        {
+            if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+            {
+                QuickEquipSlot(i);
+            }
+        }
+    }
+
+    public void QuickEquipSlot(int index)
+    {
+        if (index < 0 || index >= slots.Length || slots[index] == null || slots[index].item == null) return;
         
+        ItemDatabase item = slots[index].item;
+
+        if (item.type == ItemType.Equipable)
+        {
+            if (uiSlots != null && index < uiSlots.Length)
+            {
+                if (uiSlots[index].equipped)
+                {
+                    UnEquip(index);
+                }
+                else
+                {
+                    if (currentEquipIndex < uiSlots.Length && uiSlots[currentEquipIndex].equipped)
+                        UnEquip(currentEquipIndex);
+                    
+                    uiSlots[index].equipped = true;
+                    currentEquipIndex = index;
+                    if (EquipManager.instance != null)
+                    {
+                        EquipManager.instance.EquipNewItem(item);
+                    }
+                    UpdateUI();
+                }
+            }
+            else if (EquipManager.instance != null)
+            {
+                EquipManager.instance.EquipNewItem(item);
+            }
+        }
+        else if (item.type == ItemType.Consumable)
+        {
+            if (needs != null && item.consumables != null)
+            {
+                for (int x = 0; x < item.consumables.Length; x++)
+                {
+                    switch (item.consumables[x].type)
+                    {
+                        case ConsumableType.Health: needs.Heal(item.consumables[x].value); break;
+                        case ConsumableType.Hunger: needs.Eat(item.consumables[x].value); break;
+                        case ConsumableType.Thirst: needs.Drink(item.consumables[x].value); break;
+                        case ConsumableType.Sleep: needs.Sleep(item.consumables[x].value); break;
+                    }
+                }
+            }
+            slots[index].quantity--;
+            if (slots[index].quantity <= 0)
+            {
+                slots[index].item = null;
+            }
+            UpdateUI();
+        }
     }
 
     public void OnInventoryButton(InputAction.CallbackContext context)
@@ -72,31 +213,53 @@ public class Inventory : MonoBehaviour
         }
     }
 
-    //enventory open-close and toggle sett
     public void Toggle()
-    
     {
-        
-        if (inventoryWindow.activeInHierarchy)
+        EnsureInventoryWindow();
+
+        if (inventoryWindow == null)
         {
-            //close the inventory
-            inventoryWindow.SetActive(false);
-            onCloseInventory.Invoke();
-            controller.ToggleCursor(false);
+            Debug.LogError("[Inventory] Failed to find inventoryWindow!");
+            return;
+        }
+
+        if (controller == null)
+        {
+            controller = PlayerController.instance ?? FindAnyObjectByType<PlayerController>();
+        }
+
+        bool willBeActive = !inventoryWindow.activeSelf;
+        if (inventoryWindow.transform.parent != null)
+        {
+            inventoryWindow.transform.parent.gameObject.SetActive(true);
+        }
+        inventoryWindow.SetActive(willBeActive);
+
+        // Ensure inventory canvas sorting order is high so it renders above HUD
+        Canvas invCanvas = inventoryWindow.GetComponent<Canvas>() ?? inventoryWindow.GetComponentInParent<Canvas>();
+        if (invCanvas != null)
+        {
+            invCanvas.overrideSorting = true;
+            invCanvas.sortingOrder = 500;
+        }
+
+        if (willBeActive)
+        {
+            onOpenInventory?.Invoke();
+            if (controller != null) controller.ToggleCursor(true);
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
         }
         else
         {
-            //open the inventory
-            inventoryWindow.SetActive(true);
-            onOpenInventory.Invoke();
-            ClearSelectedItemWindow();
-            controller.ToggleCursor(true);
+            onCloseInventory?.Invoke();
+            if (controller != null) controller.ToggleCursor(false);
         }
     }
 
     public bool isOpen()
     {
-        return inventoryWindow.activeInHierarchy;
+        return inventoryWindow != null && inventoryWindow.activeInHierarchy;
     }
     
     //check if we can stack the item of we can stack then look for stack to add it to it if it cant add it to empty slot.

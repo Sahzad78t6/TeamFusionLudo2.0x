@@ -17,7 +17,10 @@ public class Campfire : Buildings, IInteractable
 
     private void Start()
     {
-        lightstartPosition = lightt.transform.localPosition;
+        if (lightt != null)
+        {
+            lightstartPosition = lightt.transform.localPosition;
+        }
         StartCoroutine(DealDamage());
     }
 
@@ -28,12 +31,13 @@ public class Campfire : Buildings, IInteractable
             if(isOn)
             {
                 for (int x = 0; x < thingsToDoDamage.Count; x++)
-                    thingsToDoDamage[x].TakePhysicDamage(damage);
-
-                
+                {
+                    if (thingsToDoDamage[x] != null)
+                        thingsToDoDamage[x].TakePhysicDamage(damage);
+                }
             }
 
-            yield return new WaitForSeconds(damagerate);
+            yield return new WaitForSeconds(damagerate > 0 ? damagerate : 1.0f);
         }
     }
 
@@ -46,17 +50,16 @@ public class Campfire : Buildings, IInteractable
     {
         isOn = !isOn;
 
-        particle.SetActive(isOn);
-        lightt.SetActive(isOn);
+        if (particle != null) particle.SetActive(isOn);
+        if (lightt != null) lightt.SetActive(isOn);
     }
 
     private void Update()
     {
-        if(isOn)
+        if(isOn && lightt != null)
         {
             float x = Mathf.PerlinNoise(Time.time * 3.0f, 0.0f) / 5.0f;
             float z = Mathf.PerlinNoise(0.0f, Time.time * 3.0f) / 5.0f;
-
             lightt.transform.localPosition = lightstartPosition + new Vector3(x, 0.0f, z);
         }
     }

@@ -9,11 +9,13 @@ public class BuildingWindow : MonoBehaviour
 {
     void OnEnable()
     {
-        Inventory.instance.onOpenInventory.AddListener(OnOpenInventory);
+        if (Inventory.instance != null && Inventory.instance.onOpenInventory != null)
+            Inventory.instance.onOpenInventory.AddListener(OnOpenInventory);
     }
     void OnDisable()
     {
-        Inventory.instance.onOpenInventory.RemoveListener(OnOpenInventory);
+        if (Inventory.instance != null && Inventory.instance.onOpenInventory != null)
+            Inventory.instance.onOpenInventory.RemoveListener(OnOpenInventory);
     }
     
 

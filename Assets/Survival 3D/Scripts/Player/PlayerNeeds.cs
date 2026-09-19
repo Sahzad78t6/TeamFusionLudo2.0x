@@ -16,105 +16,110 @@ public class PlayerNeeds : MonoBehaviour,IDamagable
     public Need health;
     public Need hunger;
     public Need thirst;
-    public Need sleep;
+    public Need sleep; // Used for Stamina in HUD
+    public Need stamina; // Alias/Dedicated Stamina
 
-    public float hungerHealthdecay;
-    public float thirstHealthdecay;
+    public float staminaDrainRate = 15f;
+    public float staminaRegenRate = 10f;
+    public float hungerHealthdecay = 1f;
+    public float thirstHealthdecay = 1.5f;
 
     public UnityEvent onTakeDamage;
 
     public static PlayerNeeds instance;
 
-    //singleton
     void Awake()
     {
         instance = this;
     }
 
-
-    // Start is called before the first frame update
     void Start()
     {
-        
-        //oyun başlangıcındaki ilk değerler  (currentValue = startValue)
+        if (health.maxValue <= 0) health.maxValue = 100f;
+        if (hunger.maxValue <= 0) hunger.maxValue = 100f;
+        if (thirst.maxValue <= 0) thirst.maxValue = 100f;
+        if (sleep.maxValue <= 0) sleep.maxValue = 100f;
+
+        if (health.startValue <= 0) health.startValue = 100f;
+        if (hunger.startValue <= 0) hunger.startValue = 100f;
+        if (thirst.startValue <= 0) thirst.startValue = 100f;
+        if (sleep.startValue <= 0) sleep.startValue = 100f;
+
         health.currentValue = health.startValue;
         hunger.currentValue = hunger.startValue;
         thirst.currentValue = thirst.startValue;
         sleep.currentValue = sleep.startValue;
-
+        stamina = sleep;
     }
 
-    // Update is called once per frame
     void Update()
     {
-        
-        //zamana bağlı olarak barlardaki değişim
-        hunger.Subtrack(hunger.decayRate*Time.deltaTime);
-        thirst.Subtrack(thirst.decayRate*Time.deltaTime);
-        sleep.Subtrack(sleep.regenrate*Time.deltaTime);
-        
-        //acıkınca can barının azalması
+        hunger.Subtrack(hunger.decayRate * Time.deltaTime);
+        thirst.Subtrack(thirst.decayRate * Time.deltaTime);
+
+        // Stamina logic: if sprinting, drain stamina; else regen
+        bool sprinting = PlayerController.instance != null && PlayerController.instance.isSprinting;
+        if (sprinting && stamina.currentValue > 0)
+        {
+            stamina.Subtrack(staminaDrainRate * Time.deltaTime);
+            if (stamina.currentValue <= 0 && PlayerController.instance != null)
+            {
+                PlayerController.instance.isSprinting = false;
+            }
+        }
+        else
+        {
+            stamina.Add(staminaRegenRate * Time.deltaTime);
+        }
+
         if (hunger.currentValue == 0.0f)
         {
             health.Subtrack(hungerHealthdecay * Time.deltaTime);
         }
         
-        //susayınca can barının azalması
         if (thirst.currentValue == 0.0f)
         {
             health.Subtrack(thirstHealthdecay * Time.deltaTime);
         }
         
-        //karakter ölümü
         if (health.currentValue == 0.0f)
         {
             Die();
         }
         
-        //ui barların yumuşak şekilde güncellenmesi (Smooth Lerp fill for survival HUD)
+        // UI bars update
         if (health.uiBar != null) health.uiBar.fillAmount = Mathf.Lerp(health.uiBar.fillAmount, health.GetPercentage(), Time.deltaTime * 10f);
         if (hunger.uiBar != null) hunger.uiBar.fillAmount = Mathf.Lerp(hunger.uiBar.fillAmount, hunger.GetPercentage(), Time.deltaTime * 10f);
         if (thirst.uiBar != null) thirst.uiBar.fillAmount = Mathf.Lerp(thirst.uiBar.fillAmount, thirst.GetPercentage(), Time.deltaTime * 10f);
         if (sleep.uiBar != null) sleep.uiBar.fillAmount = Mathf.Lerp(sleep.uiBar.fillAmount, sleep.GetPercentage(), Time.deltaTime * 10f);
 
+        if (health.uiValueText != null) health.uiValueText.text = Mathf.CeilToInt(health.currentValue).ToString();
+        if (hunger.uiValueText != null) hunger.uiValueText.text = Mathf.CeilToInt(hunger.currentValue).ToString();
+        if (thirst.uiValueText != null) thirst.uiValueText.text = Mathf.CeilToInt(thirst.currentValue).ToString();
+        if (sleep.uiValueText != null) sleep.uiValueText.text = Mathf.CeilToInt(sleep.currentValue).ToString();
     }
 
-    public void Heal(float amount)
-    {
-        health.Add(amount);
-    }
-    public void Eat(float amount)
-    {
-        hunger.Add(amount);
-    }
-    public void Drink(float amount)
-    {
-        thirst.Add(amount);
-    }
-    public void Sleep(float amount)
-    {
-        sleep.Subtrack(amount);
-    }
+    public void Heal(float amount) { health.Add(amount); }
+    public void Eat(float amount) { hunger.Add(amount); }
+    public void Drink(float amount) { thirst.Add(amount); }
+    public void Sleep(float amount) { sleep.Subtrack(amount); }
+
     public void TakePhysicDamage(int amount)
     {
         health.Subtrack(amount);
-        onTakeDamage?.Invoke();  //? --> eğer onTakeDamage eventi gerçekleşirse
-                                 //.invoke metodunu çalıştırır
+        onTakeDamage?.Invoke();
     }
     
     public void Die()
     {
-        FadeScreen4.GetComponent<Animation>().Play("you_died");
+        if (FadeScreen4 != null && FadeScreen4.GetComponent<Animation>() != null)
+        {
+            FadeScreen4.GetComponent<Animation>().Play("you_died");
+        }
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
         SceneManager.LoadScene("Menu");
-        
     }
-    
-    
-    
-    
-    
 }
 
 [System.Serializable]
@@ -122,14 +127,13 @@ public class Need
 {   
     [HideInInspector]
     public float currentValue;
-    public float maxValue;
-    public float startValue;
-    public float regenrate;
-    public float decayRate;
+    public float maxValue = 100f;
+    public float startValue = 100f;
+    public float regenrate = 1f;
+    public float decayRate = 0.5f;
     public Image uiBar;
+    public TMPro.TextMeshProUGUI uiValueText;
 
-    // Add ve Subtrack metotları Needs sekmesinin altında yer alan
-    // hp,enerji,susuzluk,uyku barlarının max ve min noktalarını belirler.
     public void Add(float amount)
     {
         currentValue = Mathf.Min(currentValue + amount, maxValue);
@@ -139,10 +143,10 @@ public class Need
     {
         currentValue = Mathf.Max(currentValue - amount, 0);
     }
-    // Barın yüzde kaç olduğunu verir
+
     public float GetPercentage()
     {
-        return currentValue / maxValue;
+        return maxValue > 0 ? currentValue / maxValue : 0;
     }
 }
 

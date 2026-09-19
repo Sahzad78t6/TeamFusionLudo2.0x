@@ -34,8 +34,12 @@ public class NPC : MonoBehaviour, IDamagable
     [Header("AI")] 
     public AIType aiType;
     private AIState aiState;
-    public float detectDistance;
-    public float safeDistance;
+    public float detectDistance = 15f;
+    public float safeDistance = 12f;
+    public float chaseDistance = 28f;
+    public float reacquireCooldown = 3.5f;
+    private float lastLostTargetTime = -10f;
+    private Vector3 spawnPosition;
 
     [Header("Wandering")] 
     public float minWanderDistance;
@@ -59,29 +63,52 @@ public class NPC : MonoBehaviour, IDamagable
     private Animator anim;
     private SkinnedMeshRenderer[] meshRenderers;
 
+    private bool IsAgentValid()
+    {
+        return agent != null && agent.enabled && agent.isOnNavMesh;
+    }
+
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
         anim = GetComponentInChildren<Animator>();
         meshRenderers = GetComponentsInChildren<SkinnedMeshRenderer>();
+        spawnPosition = transform.position;
+
+        if (agent != null)
+        {
+            agent.enabled = false;
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(transform.position, out hit, 10.0f, NavMesh.AllAreas))
+            {
+                transform.position = hit.position;
+                spawnPosition = hit.position;
+            }
+            agent.enabled = true;
+        }
     }
 
     private void Start()
     {
+        if (agent != null && !agent.isOnNavMesh)
+        {
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(transform.position, out hit, 10.0f, NavMesh.AllAreas))
+            {
+                agent.Warp(hit.position);
+            }
+        }
         SetState(AIState.Wandering);
-        
     }
 
-   
     private void Update()
     {
+        if (PlayerController.instance == null) return;
+
         //get Player distance
         playerDistance = Vector3.Distance(transform.position, PlayerController.instance.transform.position);
-        anim.SetBool("Moving",aiState != AIState.Idle);
-       
-       
-        
-        
+        anim.SetBool("Moving", aiState != AIState.Idle);
+
         switch (aiState)
         {
             case AIState.Idle: PassiveUpdate();
@@ -97,30 +124,42 @@ public class NPC : MonoBehaviour, IDamagable
 
     void PassiveUpdate()
     {
-        if (aiState == AIState.Wandering && agent.remainingDistance < 0.1f)
+        if (aiState == AIState.Wandering && IsAgentValid() && !agent.pathPending && agent.remainingDistance < 0.1f)
         {
             SetState(AIState.Idle);
-            Invoke("WanderToNewLocation",Random.Range(minWanderWaitTime,maxWanderWaitTime));
+            Invoke("WanderToNewLocation", Random.Range(minWanderWaitTime, maxWanderWaitTime));
         }
         
-        //begin the attack to player if npc detect him
-        if (aiType == AIType.Aggresive && playerDistance < detectDistance)
+        //begin the attack to player if npc detect him and reacquire cooldown has passed
+        if (aiType == AIType.Aggresive && playerDistance < detectDistance && Time.time - lastLostTargetTime > reacquireCooldown)
         {
-            
-            
             SetState(AIState.Attacking);
         }
         //run away from the player if we detect him
         else if (aiType == AIType.Scared && playerDistance < detectDistance)
         {
             SetState(AIState.Fleeing);
-            agent.SetDestination(GetFleeLocation());
+            if (IsAgentValid())
+                agent.SetDestination(GetFleeLocation());
         }
-        
     }
 
     void AttackingUpdate()
     {
+        if (!IsAgentValid()) return;
+
+        // AI Leash: Player moved beyond chase distance, stop following and return to wandering/home
+        if (playerDistance > chaseDistance)
+        {
+            lastLostTargetTime = Time.time;
+            SetState(AIState.Wandering);
+            if (IsAgentValid())
+            {
+                agent.SetDestination(spawnPosition);
+            }
+            return;
+        }
+
         if (playerDistance > attackDistance)
         {
             agent.isStopped = false;
@@ -129,35 +168,37 @@ public class NPC : MonoBehaviour, IDamagable
         else
         {
             agent.isStopped = true;
-         
+          
             if (Time.time - lastAttackTime > attackRate)
             {
                 lastAttackTime = Time.time;
-                PlayerController.instance.GetComponent<IDamagable>().TakePhysicDamage(damage);
-                
+                if (PlayerController.instance != null)
+                {
+                    PlayerController.instance.GetComponent<IDamagable>().TakePhysicDamage(damage);
+                }
                 anim.SetTrigger("Attack");
-                
             }
-            
         }
     }
 
     void FleeingUpdate()
     {
-        if (playerDistance < safeDistance && agent.remainingDistance < 0.1f)
+        if (playerDistance < safeDistance && IsAgentValid() && !agent.pathPending && agent.remainingDistance < 0.1f)
         {
-            agent.SetDestination(GetFleeLocation());
+            if (IsAgentValid())
+                agent.SetDestination(GetFleeLocation());
         }
         else if (playerDistance > safeDistance)
         {
             SetState(AIState.Wandering);
         }
-
     }
 
     void SetState(AIState newState)
     {
         aiState = newState;
+        if (!IsAgentValid()) return;
+
         switch (aiState)
         {
             case AIState.Idle:
@@ -178,17 +219,13 @@ public class NPC : MonoBehaviour, IDamagable
                 agent.isStopped = false;
                 break;
             }
-                
             case AIState.Fleeing:
             {
                 agent.speed = runSpeed;
                 agent.isStopped = false;
                 break;
             }
-                
-            
         }
-        
     }
 
     void WanderToNewLocation()
@@ -198,47 +235,44 @@ public class NPC : MonoBehaviour, IDamagable
             return;
         
         SetState(AIState.Wandering);
-        agent.SetDestination(GetWanderLocation());
+        if (IsAgentValid())
+            agent.SetDestination(GetWanderLocation());
     }
 
     Vector3 GetWanderLocation()
     {
         NavMeshHit hit;
-        NavMesh.SamplePosition(transform.position +
-                               (Random.onUnitSphere * Random.Range(minWanderDistance, maxWanderDistance)),out hit, maxWanderDistance,NavMesh.AllAreas);
+        bool found = NavMesh.SamplePosition(transform.position +
+                               (Random.onUnitSphere * Random.Range(minWanderDistance, maxWanderDistance)), out hit, maxWanderDistance, NavMesh.AllAreas);
 
         int i = 0;
 
-        while (Vector3.Distance(transform.position, hit.position) < detectDistance)
+        while (found && Vector3.Distance(transform.position, hit.position) < detectDistance)
         {
-            NavMesh.SamplePosition(transform.position +
-                                   (Random.onUnitSphere * Random.Range(minWanderDistance, maxWanderDistance)),out hit, maxWanderDistance,NavMesh.AllAreas);
+            found = NavMesh.SamplePosition(transform.position +
+                                   (Random.onUnitSphere * Random.Range(minWanderDistance, maxWanderDistance)), out hit, maxWanderDistance, NavMesh.AllAreas);
             i++;
             if (i == 30)
                 break;
         }
 
-        //dont allow npc  to walk near player
-        return hit.position;
+        return found ? hit.position : transform.position;
     }
 
     Vector3 GetFleeLocation()
     {
         NavMeshHit hit;
-        NavMesh.SamplePosition(transform.position + (Random.onUnitSphere * safeDistance), out hit, safeDistance,
-            NavMesh.AllAreas);
+        bool found = NavMesh.SamplePosition(transform.position + (Random.onUnitSphere * safeDistance), out hit, safeDistance, NavMesh.AllAreas);
         int i = 0;
-        while (GetDestinationAngel(hit.position) > 90 || playerDistance < safeDistance)
+        while (found && (GetDestinationAngel(hit.position) > 90 || playerDistance < safeDistance))
         {
-            NavMesh.SamplePosition(transform.position + (Random.onUnitSphere * safeDistance), out hit, safeDistance,
-                NavMesh.AllAreas);
+            found = NavMesh.SamplePosition(transform.position + (Random.onUnitSphere * safeDistance), out hit, safeDistance, NavMesh.AllAreas);
             i++;
             if (i == 30)
                 break;
         }
 
-        return hit.position;
-
+        return found ? hit.position : transform.position;
     }
 
     float GetDestinationAngel(Vector3 targetPos)
@@ -246,13 +280,10 @@ public class NPC : MonoBehaviour, IDamagable
         return Vector3.Angle(transform.position - PlayerController.instance.transform.position,
             transform.position + targetPos);
     }
-    
-    
-    
+
     public void TakePhysicDamage(int damageAmount)
     {
         health -= damageAmount;
-       
 
         if (health <= 0)
             Die();
@@ -266,24 +297,48 @@ public class NPC : MonoBehaviour, IDamagable
 
     void Die()
     {
-        for (int x = 0; x < dropOnDeath.Length; x++)
+        if (agent != null)
+            agent.enabled = false;
+
+        if (dropOnDeath != null)
         {
-            Instantiate(dropOnDeath[x].dropPrefab, transform.position, Quaternion.identity);
-            
+            for (int x = 0; x < dropOnDeath.Length; x++)
+            {
+                if (dropOnDeath[x] != null && dropOnDeath[x].dropPrefab != null)
+                {
+                    Instantiate(dropOnDeath[x].dropPrefab, transform.position, Quaternion.identity);
+                }
+            }
         }
-        anim.SetTrigger("Die");
-        Destroy(gameObject,this.GetComponentInChildren<Animator>().GetCurrentAnimatorStateInfo(0).length+delay);
+
+        if (anim != null)
+        {
+            anim.SetTrigger("Die");
+            float animLength = anim.GetCurrentAnimatorStateInfo(0).length;
+            Destroy(gameObject, animLength + delay);
+        }
+        else
+        {
+            Destroy(gameObject, 1.0f + delay);
+        }
     }
 
     IEnumerator DamageFlash()
     {
-        
-        audioSource.Play();
-        for (int x = 0; x < meshRenderers.Length; x++)
-            meshRenderers[x].material.color = new Color(1.0f, 0.5f, 0.5f);
-        yield return new WaitForSeconds(0.1f);
-        for (int x = 0; x < meshRenderers.Length; x++)
-            meshRenderers[x].material.color = Color.white;
-
+        if (audioSource != null) audioSource.Play();
+        if (meshRenderers != null)
+        {
+            for (int x = 0; x < meshRenderers.Length; x++)
+            {
+                if (meshRenderers[x] != null && meshRenderers[x].material != null)
+                    meshRenderers[x].material.color = new Color(1.0f, 0.5f, 0.5f);
+            }
+            yield return new WaitForSeconds(0.1f);
+            for (int x = 0; x < meshRenderers.Length; x++)
+            {
+                if (meshRenderers[x] != null && meshRenderers[x].material != null)
+                    meshRenderers[x].material.color = Color.white;
+            }
+        }
     }
 }

@@ -86,8 +86,18 @@ public class DayNight : MonoBehaviour
         RenderSettings.ambientIntensity = lightningIntensityMultiplier.Evaluate(time);
         RenderSettings.reflectionIntensity = reflectionIntensityMultiplier.Evaluate(time);
 
-
-
+        // Atmospheric Fog & Ambient Polish
+        RenderSettings.fog = true;
+        RenderSettings.fogMode = FogMode.ExponentialSquared;
+        if (sun != null && sun.gameObject.activeInHierarchy)
+        {
+            RenderSettings.fogColor = Color.Lerp(new Color(0.75f, 0.65f, 0.5f), new Color(0.6f, 0.75f, 0.9f), sun.intensity / 2f);
+            RenderSettings.fogDensity = Mathf.Lerp(0.008f, 0.003f, sun.intensity / 2f);
+        }
+        else
+        {
+            RenderSettings.fogColor = new Color(0.05f, 0.08f, 0.15f);
+            RenderSettings.fogDensity = 0.012f;
+        }
     }
-    
 }

@@ -19,12 +19,14 @@ public class ItemSlotUI : MonoBehaviour
    private void Awake()
    {
       outline = GetComponent<Outline>();
-      
    }
 
    private void OnEnable()
    {
-      outline.enabled = equipped;
+      if (outline != null)
+      {
+         outline.enabled = equipped;
+      }
    }
 
    public void Set(ItemSlot slot)
@@ -32,20 +34,30 @@ public class ItemSlotUI : MonoBehaviour
       //set the slot
       currentslot = slot;
       
+      if (slot == null || slot.item == null)
+      {
+         Clear();
+         return;
+      }
+
       //enable the icon
-      icon.gameObject.SetActive(true);
-      
-      //set the sprite of item
-      icon.sprite = slot.item.icon;
+      if (icon != null)
+      {
+         icon.gameObject.SetActive(true);
+         //set the sprite of item
+         icon.sprite = slot.item.icon;
+      }
       
       //if slots.quantity greater than 1 then run slot.quantity.tostring() but if its not greater than 1 them string is empty
-      quantityText.text = slot.quantity > 1 ? slot.quantity.ToString() : string.Empty;
+      if (quantityText != null)
+      {
+         quantityText.text = slot.quantity > 1 ? slot.quantity.ToString() : string.Empty;
+      }
 
       if (outline != null)
       {
          outline.enabled = equipped;
       }
-      
    }
    
    // function when we remove item
@@ -53,15 +65,26 @@ public class ItemSlotUI : MonoBehaviour
    {
       currentslot = null;
       //disable the icon
-      icon.gameObject.SetActive(false);
+      if (icon != null)
+      {
+         icon.gameObject.SetActive(false);
+      }
       //set quantity text empty we dont have item inside slot
-      quantityText.text = string.Empty;
-      
+      if (quantityText != null)
+      {
+         quantityText.text = string.Empty;
+      }
    }
 
    public void OnClickButton()
    {
-      Inventory.instance.SelectItem(index);
+      if (Inventory.instance == null)
+         Inventory.instance = FindAnyObjectByType<Inventory>();
+
+      if (Inventory.instance != null)
+      {
+         Inventory.instance.SelectItem(index);
+      }
    }
    
    

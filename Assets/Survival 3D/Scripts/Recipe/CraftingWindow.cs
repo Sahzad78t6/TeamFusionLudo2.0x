@@ -16,11 +16,13 @@ public class CraftingWindow : MonoBehaviour
 
     void OnEnable()
     {
-        Inventory.instance.onOpenInventory.AddListener(OnOpenInventory);
+        if (Inventory.instance != null && Inventory.instance.onOpenInventory != null)
+            Inventory.instance.onOpenInventory.AddListener(OnOpenInventory);
     }
     void OnDisable()
     {
-        Inventory.instance.onOpenInventory.RemoveListener(OnOpenInventory);
+        if (Inventory.instance != null && Inventory.instance.onOpenInventory != null)
+            Inventory.instance.onOpenInventory.RemoveListener(OnOpenInventory);
     }
     
     
@@ -32,6 +34,9 @@ public class CraftingWindow : MonoBehaviour
 
     public void Craft(CraftingRecipe recipe)
     {
+        if (Inventory.instance == null) Inventory.instance = FindAnyObjectByType<Inventory>();
+        if (Inventory.instance == null) return;
+
         //looping through all of the items we need for crafting
         for (int i = 0; i < recipe.cost.Length; i++)
         {

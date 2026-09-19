@@ -8,13 +8,19 @@ public class ItemObject : MonoBehaviour, IInteractable
 
     public string GetInteractPrompt()
     {
-        return string.Format("Pick Up {0}", item.displayName);
+        return item != null ? string.Format("Pick Up {0}", item.displayName) : "Pick Up Item";
     }
 
     public void OnInteract()
     {
+        if (Inventory.instance == null)
+            Inventory.instance = FindAnyObjectByType<Inventory>();
+
         //after interact add item to inventory
-        Inventory.instance.AddItem(item);
+        if (Inventory.instance != null && item != null)
+        {
+            Inventory.instance.AddItem(item);
+        }
         //destroy item in the world because we picked them up
         Destroy(gameObject);
     }

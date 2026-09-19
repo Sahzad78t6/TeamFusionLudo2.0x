@@ -4,12 +4,22 @@ using System.Security.Cryptography;
 using Unity.Mathematics;
 using UnityEngine;
 
-public class Resources : MonoBehaviour
+public class Resources : MonoBehaviour, IInteractable
 {
     public ItemDatabase itemToGive;
     public int capacity;
     public int quantityPerHit = 1;
     public GameObject hitParticle;
+
+    public string GetInteractPrompt()
+    {
+        return itemToGive != null ? string.Format("Gather {0}", itemToGive.displayName) : "Gather Resource";
+    }
+
+    public void OnInteract()
+    {
+        Gather(transform.position, Vector3.up);
+    }
 
     public void Gather(Vector3 hitpoint, Vector3 hitNormal)
     {
@@ -22,14 +32,26 @@ public class Resources : MonoBehaviour
             capacity -= 1;
             
             //add resource to inventory
-            Inventory.instance.AddItem(itemToGive);
+            if (Inventory.instance == null)
+                Inventory.instance = FindAnyObjectByType<Inventory>();
+
+            if (Inventory.instance != null && itemToGive != null)
+            {
+                Inventory.instance.AddItem(itemToGive);
+            }
+
+            if (NotificationUI.instance != null && itemToGive != null)
+            {
+                NotificationUI.instance.ShowNotification(string.Format("+{0} {1}", quantityPerHit, itemToGive.displayName.ToUpper()), new Color(0.3f, 1f, 0.4f));
+            }
         }
         //instantiate a particle effect at the position which we hit the tree with correct orientation
-        Destroy(Instantiate(hitParticle, hitpoint, quaternion.LookRotation(hitNormal, Vector3.up)),1.0f);
+        if (hitParticle != null)
+        {
+            Destroy(Instantiate(hitParticle, hitpoint, quaternion.LookRotation(hitNormal, Vector3.up)), 1.0f);
+        }
         
         if (capacity <= 0)
             Destroy(gameObject);
-        
     }
-    
 }

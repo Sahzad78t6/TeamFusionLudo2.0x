@@ -10,8 +10,9 @@ public class CraftingTable : Buildings, IInteractable
     
     private void Start()
     {
-        craftingWindow = FindObjectOfType<CraftingWindow>(true);
-        player = FindObjectOfType<PlayerController>();
+        var windows = UnityEngine.Resources.FindObjectsOfTypeAll<CraftingWindow>();
+        if (windows.Length > 0) craftingWindow = windows[0];
+        player = PlayerController.instance ?? FindAnyObjectByType<PlayerController>();
     }
 
     public string GetInteractPrompt()
@@ -21,7 +22,17 @@ public class CraftingTable : Buildings, IInteractable
 
     public void OnInteract()
     {
-        craftingWindow.gameObject.SetActive(true);
-        player.ToggleCursor(true);
+        if (craftingWindow == null)
+        {
+            var windows = UnityEngine.Resources.FindObjectsOfTypeAll<CraftingWindow>();
+            if (windows.Length > 0) craftingWindow = windows[0];
+        }
+        if (player == null)
+        {
+            player = PlayerController.instance ?? FindAnyObjectByType<PlayerController>();
+        }
+
+        if (craftingWindow != null) craftingWindow.gameObject.SetActive(true);
+        if (player != null) player.ToggleCursor(true);
     }
 }

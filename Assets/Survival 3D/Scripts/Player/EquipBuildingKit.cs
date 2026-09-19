@@ -33,7 +33,8 @@ public class EquipBuildingKit : Equip
 
     void Start ()
     {
-        buildingWindow = FindObjectOfType<BuildingWindow>(true).gameObject;
+        var windows = UnityEngine.Resources.FindObjectsOfTypeAll<BuildingWindow>();
+        if (windows.Length > 0) buildingWindow = windows[0].gameObject;
          
     }
 
@@ -68,27 +69,35 @@ public class EquipBuildingKit : Equip
         if (currentBuildingPreview != null)
             Destroy(currentBuildingPreview.gameObject);
 
-        buildingWindow.SetActive(true);
-        PlayerController.instance.ToggleCursor(true);
+        if (buildingWindow == null)
+        {
+            var windows = UnityEngine.Resources.FindObjectsOfTypeAll<BuildingWindow>();
+            if (windows.Length > 0) buildingWindow = windows[0].gameObject;
+        }
+
+        if (buildingWindow != null) buildingWindow.SetActive(true);
+        if (PlayerController.instance != null) PlayerController.instance.ToggleCursor(true);
     }
-
-
-
 
     // called when we select a recipe from the building window
     public void SetNewBuildingRecipe (BuildingRecipe recipe)
     {
         curRecipe = recipe;
-        buildingWindow.SetActive(false);
-        PlayerController.instance.ToggleCursor(false);
+        if (buildingWindow != null) buildingWindow.SetActive(false);
+        if (PlayerController.instance != null) PlayerController.instance.ToggleCursor(false);
 
-        currentBuildingPreview = Instantiate(recipe.previewPrefab).GetComponent<buildingPreview>();
+        if (recipe != null && recipe.previewPrefab != null)
+        {
+            currentBuildingPreview = Instantiate(recipe.previewPrefab).GetComponent<buildingPreview>();
+        }
     }
 
     void Update ()
     {
+        if (cam == null) cam = Camera.main;
+
         // do we have a recipe selected?
-        if(curRecipe != null && currentBuildingPreview != null && Time.time - lastPlacementUpdateTime > placementUpdateRate)
+        if(curRecipe != null && currentBuildingPreview != null && cam != null && Time.time - lastPlacementUpdateTime > placementUpdateRate)
         {
             lastPlacementUpdateTime = Time.time;
 
@@ -96,7 +105,8 @@ public class EquipBuildingKit : Equip
             Ray ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2, 0));
             RaycastHit hit;
 
-            if(Physics.Raycast(ray, out hit, placementMaxDistance, placementLayerMask))
+            LayerMask mask = placementLayerMask.value != 0 ? placementLayerMask : ~0;
+            if(Physics.Raycast(ray, out hit, placementMaxDistance, mask))
             {
                 currentBuildingPreview.transform.position = hit.point;
                 currentBuildingPreview.transform.up = hit.normal;

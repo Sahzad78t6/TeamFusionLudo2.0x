@@ -85,3 +85,12 @@ node_modules
 
 .idea
 .idea/.idea.survival-shooter/.idea
+
+# Local IDE and temporary directories
+UserSettings/
+.vscode/
+*.slnx
+Assets/_Recovery/
+Assets/_TerrainAutoUpgrade/
+Screenshots/
+Assets/Survival 3D/Editor_ScanOutput.txt

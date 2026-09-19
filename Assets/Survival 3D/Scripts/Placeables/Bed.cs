@@ -23,7 +23,8 @@ public class Bed : Buildings, IInteractable
     
     private void Start()
     {
-        FadeScreen2 = FindObjectOfType<RawImage>(true);
+        var images = UnityEngine.Resources.FindObjectsOfTypeAll<RawImage>();
+        if (images.Length > 0) FadeScreen2 = images[0];
     }
 
    
@@ -32,26 +33,34 @@ public class Bed : Buildings, IInteractable
     {
         if (CanSleep())
         {
-            FadeScreen2.GetComponent<Animation>().Play("sleep_anim");
+            if (FadeScreen2 != null && FadeScreen2.GetComponent<Animation>() != null)
+            {
+                FadeScreen2.GetComponent<Animation>().Play("sleep_anim");
+            }
 
-            PolyverseSkies.instance.gameObject.SetActive(false);
+            if (PolyverseSkies.instance != null)
+            {
+                PolyverseSkies.instance.gameObject.SetActive(false);
+                PolyverseSkies.instance.gameObject.SetActive(true);
+                PolyverseSkies.instance.timeOfDay = 0.0f;
+            }
             
-            PolyverseSkies.instance.gameObject.SetActive(true);
-            
-            
-            DayNight.instance.time = wakupTime;
-            PolyverseSkies.instance.timeOfDay = 0.0f;
+            if (DayNight.instance != null)
+            {
+                DayNight.instance.time = wakupTime;
+            }
            
-            PlayerNeeds.instance.Sleep(sleepToGive);
-            
+            if (PlayerNeeds.instance != null)
+            {
+                PlayerNeeds.instance.Sleep(sleepToGive);
+            }
         }
     }
-    
 
     bool CanSleep()
     {
+        if (DayNight.instance == null) return true;
         return DayNight.instance.time >= startSleepTime || DayNight.instance.time < endSleepTime;
-        
     }
     
 }

@@ -46,29 +46,40 @@ public class EquipToolAxe : Equip
 
     public void OnHit()
     {
-        //set the ray to shoot from center of screen
-        Ray ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2, 0));
-        //store all the actual hit data in
+        if (cam == null) cam = GetComponentInParent<PlayerController>()?.GetComponentInChildren<Camera>() ?? Camera.main;
+        if (cam == null) return;
+
+        float dist = Mathf.Max(attackdistance, 3.5f);
+        Ray ray = new Ray(cam.transform.position, cam.transform.forward);
         RaycastHit hit;
-        //shoot raycast
-        if (Physics.Raycast(ray, out hit, attackdistance))
+
+        int ignoreMask = (1 << 8) | (1 << 2);
+        if (Physics.Raycast(ray, out hit, dist, ~ignoreMask))
         {
             if (hitSound != null)
             {
                 AudioSource.PlayClipAtPoint(hitSound, hit.point);
             }
 
-            // if we hit resource
-            if (doesGatherresources && hit.collider.GetComponent<ResourceFruitTree>())
+            // Resource Gathering (Wood / Trees)
+            if (doesGatherresources)
             {
-                hit.collider.GetComponent<ResourceFruitTree>().Gather(hit.point, hit.normal);
+                var res = hit.collider.GetComponent<Resources>() ?? hit.collider.GetComponentInParent<Resources>();
+                if (res != null) res.Gather(hit.point, hit.normal);
+
+                var fruitTree = hit.collider.GetComponent<ResourceFruitTree>() ?? hit.collider.GetComponentInParent<ResourceFruitTree>();
+                if (fruitTree != null) fruitTree.Gather(hit.point, hit.normal);
             }
-            // if we hit damagable or enemy 
-            if (doesDealDamage && hit.collider.GetComponent<IDamagable>() != null)
+
+            // Combat / Damagable
+            if (doesDealDamage)
             {
-                hit.collider.GetComponent<IDamagable>().TakePhysicDamage(damage);
+                var damagable = hit.collider.GetComponent<IDamagable>() ?? hit.collider.GetComponentInParent<IDamagable>();
+                if (damagable != null)
+                {
+                    damagable.TakePhysicDamage(damage);
+                }
             }
-            
         }
     }
     
