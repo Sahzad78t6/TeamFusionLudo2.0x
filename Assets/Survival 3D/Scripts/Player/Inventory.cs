@@ -66,6 +66,11 @@ public class Inventory : MonoBehaviour
             if (invObj != null) inventoryWindow = invObj;
         }
 
+        if (inventoryWindow != null && inventoryWindow.transform.localScale == Vector3.zero)
+        {
+            inventoryWindow.transform.localScale = Vector3.one;
+        }
+
         EnsureCloseButton();
     }
 
@@ -229,18 +234,23 @@ public class Inventory : MonoBehaviour
         }
 
         bool willBeActive = !inventoryWindow.activeSelf;
-        if (inventoryWindow.transform.parent != null)
+        if (inventoryWindow.transform.localScale == Vector3.zero)
         {
-            inventoryWindow.transform.parent.gameObject.SetActive(true);
+            inventoryWindow.transform.localScale = Vector3.one;
         }
         inventoryWindow.SetActive(willBeActive);
 
         // Ensure inventory canvas sorting order is high so it renders above HUD
-        Canvas invCanvas = inventoryWindow.GetComponent<Canvas>() ?? inventoryWindow.GetComponentInParent<Canvas>();
-        if (invCanvas != null)
+        Canvas rootCanvas = inventoryWindow.GetComponent<Canvas>() ?? inventoryWindow.GetComponentInParent<Canvas>();
+        if (rootCanvas != null)
         {
-            invCanvas.overrideSorting = true;
-            invCanvas.sortingOrder = 500;
+            rootCanvas.overrideSorting = true;
+            rootCanvas.sortingOrder = 500;
+        }
+        foreach (var c in inventoryWindow.GetComponentsInChildren<Canvas>(true))
+        {
+            c.overrideSorting = true;
+            c.sortingOrder = 500;
         }
 
         if (willBeActive)

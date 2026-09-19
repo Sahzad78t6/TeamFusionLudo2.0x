@@ -5,26 +5,29 @@ using UnityEngine;
 
 public class EquipToolPickaxe : Equip
 {
-    public float attackRate;
-    public float attackdistance;
+    public float attackRate = 0.5f;
+    public float attackdistance = 4.0f;
     private bool attacking;
+    private bool hasHitThisAttack;
 
     [Header("Combat")] 
-    public bool doesDealDamage;
-    public int damage;
+    public bool doesDealDamage = true;
+    public int damage = 15;
 
     [Header("Resource Gathering")]
-    public bool doesGatherresources;
+    public bool doesGatherresources = true;
 
     //components
     private Animator anim;
     private Camera cam;
 
+    [Header("Audio")]
+    public AudioClip hitSound;
+
     private void Awake()
     {
-        //get components
-        anim = GetComponent<Animator>();
-        cam = Camera.main;
+        anim = GetComponent<Animator>() ?? GetComponentInChildren<Animator>();
+        cam = GetComponentInParent<PlayerController>()?.GetComponentInChildren<Camera>() ?? Camera.main;
     }
 
     public override void OnAttackInput()
@@ -32,56 +35,88 @@ public class EquipToolPickaxe : Equip
         if (!attacking)
         {
             attacking = true;
-            anim.SetTrigger("Attack");
-            Invoke("OnCanAttack",attackRate);
+            hasHitThisAttack = false;
+
+            if (anim == null) anim = GetComponent<Animator>() ?? GetComponentInChildren<Animator>();
+            if (anim != null)
+            {
+                anim.SetTrigger("Attack");
+            }
+
+            // Guaranteed hit execution: delayed slightly to match swing motion
+            StartCoroutine(DelayedHit());
+
+            float rate = attackRate > 0.05f ? attackRate : 0.5f;
+            Invoke("OnCanAttack", rate);
         }
     }
+
+    private IEnumerator DelayedHit()
+    {
+        yield return new WaitForSeconds(0.12f);
+        if (!hasHitThisAttack)
+        {
+            OnHit();
+        }
+    }
+
     void OnCanAttack()
     {
         attacking = false;
+        hasHitThisAttack = false;
     }
-
-    [Header("Audio")]
-    public AudioClip hitSound;
 
     public void OnHit()
     {
+        if (hasHitThisAttack) return;
+        hasHitThisAttack = true;
+
         if (cam == null) cam = GetComponentInParent<PlayerController>()?.GetComponentInChildren<Camera>() ?? Camera.main;
+        if (cam == null) cam = Camera.main;
         if (cam == null) return;
 
-        float dist = Mathf.Max(attackdistance, 3.5f);
+        float dist = Mathf.Max(attackdistance, 4.0f);
         Ray ray = new Ray(cam.transform.position, cam.transform.forward);
-        RaycastHit hit;
 
-        int ignoreMask = (1 << 8) | (1 << 2);
-        if (Physics.Raycast(ray, out hit, dist, ~ignoreMask))
+        RaycastHit[] hits = Physics.RaycastAll(ray, dist);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (var hit in hits)
         {
+            if (hit.collider.gameObject.layer == 8 || hit.collider.gameObject.layer == 2) continue;
+            if (hit.collider.transform.IsChildOf(transform) || (PlayerController.instance != null && hit.collider.transform.IsChildOf(PlayerController.instance.transform))) continue;
+            if (hit.collider.isTrigger) continue;
+
             if (hitSound != null)
             {
                 AudioSource.PlayClipAtPoint(hitSound, hit.point);
             }
 
-            // Resource Gathering (Stone / Rocks)
-            if (doesGatherresources)
+            // 1. Stone Gathering Priority
+            var stone = hit.collider.GetComponent<ResourceStone>() ?? hit.collider.GetComponentInParent<ResourceStone>();
+            if (stone != null)
             {
-                var stone = hit.collider.GetComponent<ResourceStone>() ?? hit.collider.GetComponentInParent<ResourceStone>();
-                if (stone != null) stone.Gather(hit.point, hit.normal);
-
-                var res = hit.collider.GetComponent<Resources>() ?? hit.collider.GetComponentInParent<Resources>();
-                if (res != null) res.Gather(hit.point, hit.normal);
+                stone.Gather(hit.point, hit.normal);
+                return;
             }
 
-            // Combat / Damagable
-            if (doesDealDamage)
+            // 2. Other Resources
+            var res = hit.collider.GetComponent<Resources>() ?? hit.collider.GetComponentInParent<Resources>();
+            if (res != null)
             {
-                var damagable = hit.collider.GetComponent<IDamagable>() ?? hit.collider.GetComponentInParent<IDamagable>();
-                if (damagable != null)
-                {
-                    damagable.TakePhysicDamage(damage);
-                }
+                res.Gather(hit.point, hit.normal);
+                return;
             }
+
+            // 3. Combat
+            var damagable = hit.collider.GetComponent<IDamagable>() ?? hit.collider.GetComponentInParent<IDamagable>();
+            if (damagable != null)
+            {
+                damagable.TakePhysicDamage(damage > 0 ? damage : 15);
+                return;
+            }
+
+            break;
         }
     }
-    
-    
 }

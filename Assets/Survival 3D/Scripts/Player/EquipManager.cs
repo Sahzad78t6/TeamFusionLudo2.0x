@@ -86,7 +86,27 @@ public class EquipManager : MonoBehaviour
     public void EquipNewItem(ItemDatabase item)
     {
         UnEquipItem();
-        currentEquip = Instantiate(item.equipPrefab, equipParent).GetComponent<Equip>();
+        if (item == null || item.equipPrefab == null) return;
+
+        GameObject go = Instantiate(item.equipPrefab, equipParent);
+        // Disable any colliders on the visual tool in player's hands so it cannot block camera raycasts
+        foreach (var col in go.GetComponentsInChildren<Collider>(true))
+        {
+            col.enabled = false;
+        }
+        SetLayerRecursively(go, 2); // Layer 2 is Ignore Raycast
+
+        currentEquip = go.GetComponent<Equip>() ?? go.GetComponentInChildren<Equip>();
+    }
+
+    private void SetLayerRecursively(GameObject obj, int newLayer)
+    {
+        if (obj == null) return;
+        obj.layer = newLayer;
+        foreach (Transform child in obj.transform)
+        {
+            if (child != null) SetLayerRecursively(child.gameObject, newLayer);
+        }
     }
 
     public void UnEquipItem()

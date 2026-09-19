@@ -70,6 +70,16 @@ public class MobileInputManager : MonoBehaviour
             esObj.AddComponent<StandaloneInputModule>();
         }
 
+        // Neutralize any invisible full-screen overlays that block raycasts
+        foreach (var g in UnityEngine.Resources.FindObjectsOfTypeAll<Graphic>())
+        {
+            if (g != null && (g.gameObject.name == "bloodimage" || g.gameObject.name == "diescreen" || g.gameObject.name == "raw" || g.gameObject.name == "FadeScreen" || g.gameObject.name.Contains("Blood") || g.gameObject.name.Contains("Damage")))
+            {
+                g.raycastTarget = false;
+            }
+        }
+
+
         // Auto-create Mobile UI Canvas
         GameObject canvasObj = new GameObject("MobileControlsCanvas");
         mobileCanvas = canvasObj.AddComponent<Canvas>();
@@ -293,10 +303,10 @@ public class MobileInputManager : MonoBehaviour
         btn.onClick.AddListener(onClick);
 
         EventTrigger trigger = btnObj.AddComponent<EventTrigger>();
-        EventTrigger.Entry clickEntry = new EventTrigger.Entry();
-        clickEntry.eventID = EventTriggerType.PointerClick;
-        clickEntry.callback.AddListener((data) => { onClick?.Invoke(); });
-        trigger.triggers.Add(clickEntry);
+        EventTrigger.Entry downEntry = new EventTrigger.Entry();
+        downEntry.eventID = EventTriggerType.PointerDown;
+        downEntry.callback.AddListener((data) => { onClick?.Invoke(); });
+        trigger.triggers.Add(downEntry);
 
         GameObject textObj = new GameObject("Text");
         textObj.transform.SetParent(btnObj.transform, false);
